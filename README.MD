@@ -47,7 +47,7 @@ go get github.com/liukelin/Bubod
 ##### 配置
 `````sh
 
-vim Bifrost.ini
+vim Bubod.ini
 
 [Bubod]
 ; 集群名称
@@ -73,7 +73,7 @@ host=127.0.0.1
 port=3306
 user=root
 pass=
-db=bifrost_test
+db=bubod_test
 
 # 需要订阅的tables
 tables=
