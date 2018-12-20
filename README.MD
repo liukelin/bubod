@@ -1,4 +1,4 @@
-# bubod ---- MySQL/Maria数据变更解析
+# bubod ---- MySQL/Maria 数据变更增量事件获取 
 
 
 * 支持同步到多种第三方服务, for example:
