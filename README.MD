@@ -1,10 +1,11 @@
-# bubod ---- MySQL/Maria数据变更解析
+# bubod ---- MySQL/Maria 数据变更增量事件获取 
 
 
 * 支持同步到多种第三方服务, for example:
 
 * Redis
 * RabbitMQ
+* Disque
 * Kafka
 * Http 
 
@@ -45,7 +46,7 @@ go get github.com/liukelin/Bubod
 ```
 
 ##### 配置
-`````sh
+`````
 
 vim Bubod.ini
 
@@ -108,8 +109,6 @@ server=127.0.0.1:2181
 ./Bubod-server -config=bubod.ini
 
 `````
-
-##### 停止
 
 `````
 
