@@ -110,14 +110,13 @@ server=127.0.0.1:2181
 
 `````
 
-
+##### 参考资料
 `````
- documentation:
- https://dev.mysql.com/doc/internals/en/replication-protocol.html
- binlog事件类型 https://dev.mysql.com/doc/internals/en/binlog-event.html
+ documentation: https://dev.mysql.com/doc/internals/en/replication-protocol.html
+ binlog事件类型： https://dev.mysql.com/doc/internals/en/binlog-event.html
  https://dev.mysql.com/doc/internals/en/row-based-replication.html
 
- 感谢 go-mysql提供的相关MySQL协议解析库。
+ go-mysql提供的相关MySQL协议解析库。
  https://github.com/siddontang/go-mysql
 
  python实现
