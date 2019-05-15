@@ -23,7 +23,7 @@ func main() {
 	defer client.Close()
 	var n int=0
 
-	for n<20{
+	for n<20 {
 		n++
 		//创建消息
 		msg := &sarama.ProducerMessage{}

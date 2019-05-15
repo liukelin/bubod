@@ -1,4 +1,4 @@
-package lib
+package zookeeper
 
 import (
 	"github.com/samuel/go-zookeeper/zk"
@@ -10,21 +10,21 @@ import (
 	"os"
 )
 
-type ZookeeperConfig struct {
-	Servers    []string
+type Config struct {
+	Servers    []string	// 服务节点列表
 	RootPath   string	// 集群node flag=0 并且保存同步位点信息
 	MasterPath string	// 节点node命名前缀 flag=1 抢占节点，注册成功为master
 }
 
 type ElectionManager struct {
 	ZKClientConn *zk.Conn
-	ZKConfig     *ZookeeperConfig
-	IsMaster    chan bool	// 是否选举master成功
-	IsError     chan bool	// 监听状态 是否异常, 用于监听zk状态是否正常
-	MyPath		string		// master节点path (冗余)
+	ZKConfig     *Config
+	IsMaster     chan bool	// 是否选举master成功
+	IsError      chan bool	// 监听状态 是否异常, 用于监听zk状态是否正常
+	MyPath		 string		// master节点path (冗余)
 }
 
-func NewElectionManager(zkConfig *ZookeeperConfig, isMaster chan bool, isError chan bool) *ElectionManager {
+func NewElectionManager(zkConfig *Config, isMaster chan bool, isError chan bool) *ElectionManager {
 	electionManager := &ElectionManager{
 		ZKClientConn: 	nil,
 		ZKConfig:		zkConfig,
@@ -64,11 +64,13 @@ func (electionManager *ElectionManager) isConnected() bool {
 
 // 初始化zookeeper连接
 func (electionManager *ElectionManager) initConnection() error {
+	
 	// 连接为空，或连接不成功，获取zookeeper服务器的连接
 	if !electionManager.isConnected() {
 
 		conn, connChan, err := zk.Connect(electionManager.ZKConfig.Servers, time.Second)
 		if err != nil {
+			electionManager.IsError <- false // 表示可能失去了master
 			return err
 		}
 
@@ -81,8 +83,12 @@ func (electionManager *ElectionManager) initConnection() error {
 				if connEvent.State == zk.StateConnected {
 					isConnected = true
 					log.Println("connect to zookeeper server success.")
+				}else{
+					// log.Println("connect to zookeeper server error.")
+					// electionManager.IsError <- false // 表示可能失去了master
 				}
 			case _ = <-time.After(time.Second * 3): // 3秒仍未连接成功则返回连接超时
+				log.Println("connect to zookeeper server timeout.")
 				return errors.New("connect to zookeeper server timeout.")
 			}
 			if isConnected {
@@ -197,7 +203,6 @@ func (electionManager *ElectionManager) watchMaster() {
 				err = electionManager.electMaster()
 				if err != nil {
 					log.Println("elect new master error: ", err)
-					electionManager.IsError <- false // 表示
 				}
 
 			}
@@ -242,7 +247,7 @@ func (electionManager *ElectionManager) GetData() string{
 
 func main() {
 	// zookeeper配置
-	zkConfig := &ZookeeperConfig{
+	zkConfig := &Config{
 		Servers:    []string{"127.0.0.1:8121"},
 		RootPath:   "/ElectMasterDemo",
 		MasterPath: "/master",

@@ -10,6 +10,8 @@ import (
 	"bubod/Bubod/mysql"
 	"bubod/Bubod/mq/disque"
 	"bubod/Bubod/mq/rabbit"
+	zk "bubod/Bubod/ha/zookeeper"
+	// "bubod/Bubod/ha/etcd"
 )
 
 // 配置属性
@@ -23,12 +25,20 @@ type DumpConfig struct {
 	BinlogDumpFileName 		string `json:"BinlogDumpFileName"`		 // 需要注意的问题是一个binlog事件占几行，起始位置需要正确，否则解析失败
 	BinlogDumpPosition 		uint32 `json:"BinlogDumpPosition"`		 // pos
 	Conf					map[string]map[string]string 			 // 所有配置
-	ElectionManager 		*ElectionManager						 // zk
-	ZkErrorChan				chan bool								 // 用于实时获取zk状态
 	MqClass 				MqClass									 // mq
-	SyncPos					string									 // 已同步位点。
+	SyncPos					string									 // 已同步位点。（同步当前pos信息） 同时读写可能有锁问题
+	Ha 						*Ha										 // 高可用相关配置
 }
 
+// 高可用相关， 目前支持zk/etcd 后续可改为统一 interface
+type Ha struct {
+	ZkClient 	*zk.ElectionManager // zookeeper
+	// etcdClient	
+	ErrorChan	chan bool		 // 运行状态
+	MasterChan	chan bool		 // 是否master
+}
+
+// table
 type Table struct {
 	sync.Mutex
 	Name         string		// 表名
@@ -56,10 +66,8 @@ type MqClass interface {
 }
 
 func Run(conf map[string]map[string]string){
+
 	database := config.GetConf("Database")
-	// bubod	 := config.GetConf("Bubod")
-	// channel	 := GetConf("Channel")
-	
 	connectUri := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", database["user"], database["pass"], database["host"], database["port"], database["db"] ) 
 	server_id, err := strconv.ParseUint(database["server_id"], 10, 64)
 	if err != nil {
@@ -77,33 +85,37 @@ func Run(conf map[string]map[string]string){
 		BinlogDumpFileName:	"", //"mysql-bin.000003",
 		BinlogDumpPosition:	0,  // 120,
 		Conf:				conf,
+		Ha:					&Ha{
+								ZkClient: 	nil,
+								ErrorChan:	make(chan bool),
+								MasterChan:	make(chan bool),
+							},
 	}
 
 	// 高可用环境下 注册服务
-	// var electionManager *ElectionManager
-	dumpConfig.ZkErrorChan = make(chan bool)
 	if (config.GetConfigVal("Zookeeper","server") != ""){
 		zkserv := strings.Split(config.GetConfigVal("Zookeeper","server"), ",")
 
 		// zookeeper配置
-		zkConfig := &ZookeeperConfig{
+		zkConfig := &zk.Config{
 			Servers:    zkserv, // []string{"127.0.0.1:2181"},
 			RootPath:   "/"+dumpConfig.ClusterName,
 			MasterPath: "/master",
 		}
-		isMasterChan := make(chan bool)
-		var isMaster bool
-		// 选举
-		dumpConfig.ElectionManager = NewElectionManager(zkConfig, isMasterChan, dumpConfig.ZkErrorChan)
-		go dumpConfig.ElectionManager.Run()
 
-		log.Println("zookeeper elect master Waiting ...")
+		// 选举
+		dumpConfig.Ha.ZkClient = zk.NewElectionManager(zkConfig, dumpConfig.Ha.MasterChan, dumpConfig.Ha.ErrorChan)
+		go dumpConfig.Ha.ZkClient.Run()
+
+		log.Println("Ha elect master Waiting ...")
 
 		for {
-			isMaster = <-isMasterChan
-			if isMaster {
-				log.Println("zookeeper elect master success.")
-				break
+			select {
+			case isMaster := <-dumpConfig.Ha.MasterChan:
+				if isMaster {
+					log.Println("Ha elect master success.")
+					break
+				}
 			}
 			time.Sleep(1 * time.Second)
 		}
@@ -166,18 +178,19 @@ func (dumpConfig *DumpConfig)AddDump() *dump{
 							mysql.DELETE_ROWS_EVENTv0,
 							mysql.WRITE_ROWS_EVENTv2, 
 							mysql.UPDATE_ROWS_EVENTv2, 
-							mysql.DELETE_ROWS_EVENTv2},
+							mysql.DELETE_ROWS_EVENTv2,
+							mysql.QUERY_EVENT},
 	}
 
 	return &dump{
-		ConnStatus:         	"starting",
-		ConnErr:            	"starting", 
+		ConnStatus:     "starting",
+		ConnErr:        "starting", 
+		binlogDump: 	binlogDump,
+		replicateDoDb: 	make(map[string]uint8, 0),
+		killStatus:		0,
+		dumpConfig:		dumpConfig,
 		// maxBinlogDumpFileName:	"",	 // 事件最大限制
 		// maxBinlogDumpPosition:	0,	 // 事件最大限制
-		binlogDump: 			binlogDump,
-		replicateDoDb: 			make(map[string]uint8, 0),
-		killStatus:				0,
-		dumpConfig:				dumpConfig,
 	}
 }
 
@@ -195,12 +208,18 @@ func (dump *dump) Start() {
 	for {
 		select {
 		case msg := <-reslut:
-			log.Printf("monitor reslut:%s \r\n", msg)
-		
-		case zkStatus := <-dump.dumpConfig.ZkErrorChan:
+			log.Printf("reslut:%s \r\n", msg)
+			
+		case zkStatus := <-dump.dumpConfig.Ha.ErrorChan:
 			if !zkStatus{
-				// 如果高可用模式下zk连接发送故障，则终止服务
+				// 如果高可用模式下zk 连接发送故障 则终止服务
 				log.Printf("ZkErrorChan error\r\n")
+				break
+			}
+		case isMaster := <-dump.dumpConfig.Ha.MasterChan:
+			if !isMaster{
+				// 如果高可用模式下zk失去master 则终止服务
+				log.Printf("ZkMasterChan error\r\n")
 				break
 			}
 		}

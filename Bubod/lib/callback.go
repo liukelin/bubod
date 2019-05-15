@@ -10,15 +10,15 @@ import (
 // 1、将数据写入mq
 // 2、更新同步位点信息 file/zookeeper
 func (dump *dump) Callback(data *mysql.EventReslut) {
-	if len(data.Rows) == 0 {
-		return
-	}
+	// if len(data.Rows) == 0 {
+	// 	return
+	// }
 	// key := data.SchemaName + "-" + data.TableName
 	// fmt.Printf(key)
 
 	// log.Println("===Callback:")
 	// log.Println("===EventHeader:", data.Header)
-	// log.Println("===EventType:", mysql.EvenTypeName(data.Header.EventType))
+	log.Println("===EventType:", mysql.EvenTypeName(data.Header.EventType))
 	// log.Println("===SchemaName:", data.SchemaName)
 	// log.Println("===TableName:", data.TableName)
 	// log.Println("===Query:", data.Query)

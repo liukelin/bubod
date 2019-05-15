@@ -13,6 +13,7 @@ type RotateEvent struct {
 	filename string
 }
 
+// 返回当前的位点文件
 func  (parser *eventParser) parseRotateEvent(buf *bytes.Buffer) (event *RotateEvent, err error) {
 	event = new(RotateEvent)
 	err = binary.Read(buf, binary.LittleEndian, &event.header)

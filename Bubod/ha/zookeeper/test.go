@@ -1,6 +1,6 @@
 // zookeeper 相关
 // 使用临时节点，作为服务注册。编号最小的节点为start，其余为backup
-package lib
+package zookeeper
 
 import (
     "fmt"

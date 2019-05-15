@@ -42,7 +42,7 @@ func (dumpConfig *DumpConfig) GetLastPosition() string{
 
 	// 从zookeeper获取位点信息，待实现。。。
 	if (config.GetConfigVal("Zookeeper","server") != ""){
-		zk_pos = dumpConfig.ElectionManager.GetData()
+		zk_pos = dumpConfig.Ha.ZkClient.GetData()
 	}
 
 	// 使用最大位点

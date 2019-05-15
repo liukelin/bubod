@@ -1,0 +1,13 @@
+[
+    {
+        "binlog": "mysql-bin.000021:0",
+        "db": "bubod_test",
+        "table": "test2",
+        "query": "ALTER TABLE `test2`  ADD `tes2_5` INT(12) NOT NULL  AFTER `test2_4`",
+        "event_type": "query",
+        "primary": "",
+        "before": {},
+        "after": {},
+        "timestamp": 1542886275
+    }
+]

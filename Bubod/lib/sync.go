@@ -20,8 +20,8 @@ func (dumpConfig *DumpConfig) InstantSync() {
 		if newPos != dumpConfig.SyncPos {
 			// 保存同步
 			dumpConfig.SyncBinlogFilenamePos(newPos)
+			log.Println("Sync BinlogFilenamePos=============:", dumpConfig.SyncPos, " to " , newPos)
 		}
-		log.Println("=============:",newPos)
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -56,7 +56,10 @@ func (dumpConfig *DumpConfig) SyncBinlogFilenamePos(fileNamePos string) error {
 
 	// 同步到zk
 	if (dumpConfig.Conf["Zookeeper"]["server"] != ""){
-		dumpConfig.ElectionManager.SetData(fileNamePos)
+		dumpConfig.Ha.ZkClient.SetData(fileNamePos)
 	}
+	// 已同步位点
+	dumpConfig.SyncPos = fileNamePos
+
 	return nil
 }

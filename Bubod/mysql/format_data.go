@@ -32,6 +32,8 @@ func EvenTypeName(e EventType) string {
 		return "update"
 	case DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2:
 		return "delete"
+	case QUERY_EVENT:
+		return "query"
 	}
 	return fmt.Sprintf("%d", e)
 }
@@ -49,7 +51,8 @@ func FormatEventDataJson(data *FormatDataJsonStruct) string {
 
 // 拆分组装数据
 func FormatEventData(data *EventReslut) []string {
-	if len(data.Rows)<1 {
+	// 不是row事件直接退出
+	if len(data.Rows)<1 && data.Header.EventType != QUERY_EVENT { 
 		return nil
 	}
 
@@ -69,23 +72,30 @@ func FormatEventData(data *EventReslut) []string {
 	}
 	var formatEventDatas = make([]string, 0)
 	switch eventType {
-	case "insert", "delete":
+	case "insert":
 
 		// var formatEventDatas = make([]string, len(data.Rows))
+		for _, row := range data.Rows {
+			_data := formatDataJsonStruct
+			_data.After = row
+			formatEventDatas = append(formatEventDatas, FormatEventDataJson(_data))
+		}
+	case "delete":
 		for _, row := range data.Rows {
 			_data := formatDataJsonStruct
 			_data.Before = row
 			formatEventDatas = append(formatEventDatas, FormatEventDataJson(_data))
 		}
-
 	case "update":
 		
 		// var formatEventDatas = make([]string, len(data.Rows)/2)
 		for k, row := range data.Rows {
-			if k%2 == 1 { // 奇数
+			// log.Println("=========: ",k, row, "\r\n")
+
+			if k%2 == 0 { // 偶数
 				_data := formatDataJsonStruct
 				_data.Before = row			// data.Rows[k-1]
-				_data.After = data.Rows[k]
+				_data.After = data.Rows[k+1]
 				formatEventDatas = append(formatEventDatas, FormatEventDataJson(_data))
 			}
 		}
@@ -102,11 +112,11 @@ func FormatEventData(data *EventReslut) []string {
 /*
 {
 	"binlog": "mysql-bin.000005:4",
-	"db": "bifrost_test",
+	"db": "bubod_test",
 	"table": "test3",
 	"query": "",
 	"event_type": "update",
-	"is_primary":, // 主键字段
+	"primary":, "id"// 主键字段
 	"before": {
 		"id": 1,
 		"test_unsinged_bigint": 5,

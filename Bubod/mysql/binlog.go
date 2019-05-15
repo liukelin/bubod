@@ -286,6 +286,15 @@ func (parser *eventParser) GetTableSchemaByName(tableId uint64, database string,
 	return
 }
 
+
+/*
+获取当前连接的binlog同步状态
++------+------------------------------------------------------------------+
+| TIME | STATE                                                            |
++------+------------------------------------------------------------------+
+| 1049 | Master has sent all binlog to slave; waiting for binlog to be up |
++------+------------------------------------------------------------------+
+*/
 func (parser *eventParser) GetConnectionInfo(connectionId string) (m map[string]string){
 	parser.connLock.Lock()
 	defer func() {
@@ -449,6 +458,7 @@ func (mc *mysqlConn) DumpBinlog(filename string, position uint32, parser *eventP
 					}
 				}
 			}
+			
 			//only return replicateDoDb, any sql may be use db.table query
 			if len(parser.replicateDoDb) > 0 {
 				if _, ok := parser.replicateDoDb[event.SchemaName]; !ok {
@@ -466,6 +476,7 @@ func (mc *mysqlConn) DumpBinlog(filename string, position uint32, parser *eventP
 				break
 			}
 			//set binlog info
+			// log.Println("=========xxxx: ",event.Header.EventType)
 			callbackFun(event)
 			parser.binlogFileName = event.BinlogFileName
 			parser.binlogPosition = event.Header.LogPos
@@ -539,6 +550,12 @@ replication event checksum
 binlog验证 设置
 mysql5.6.5以后的版本中binlog_checksum默认值是crc32
 而之前的版本binlog_checksum默认值是none
+mysql> SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM';
++-----------------+-------+
+| Variable_name   | Value |
++-----------------+-------+
+| binlog_checksum | CRC32 |
++-----------------+-------+
 */
 func (This *BinlogDump) checksum_enabled() {
 	sql := "SHOW GLOBAL VARIABLES LIKE 'BINLOG_CHECKSUM'"
@@ -568,8 +585,16 @@ func (This *BinlogDump) checksum_enabled() {
 	return
 }
 
+/*
 // 获取mysql master 最后位点信息
 // [file, position]
+mysql> SHOW MASTER STATUS;
++------------------+----------+--------------+------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------------+----------+--------------+------------------+-------------------+
+| mysql-bin.000021 |     1573 |              |                  |                   |
++------------------+----------+--------------+------------------+-------------------+
+*/
 func (This *BinlogDump) getMasterFilePosition() []string {
 	sql := "SHOW MASTER STATUS;"
 	stmt, err := This.mysqlConn.Prepare(sql)
@@ -596,6 +621,15 @@ func (This *BinlogDump) getMasterFilePosition() []string {
 	return nil
 }
 
+/*
+ 获取当前连接id
+mysql> SELECT connection_id();
++-----------------+
+| connection_id() |
++-----------------+
+|              87 |
++-----------------+
+ */
 func (This *BinlogDump) startConnAndDumpBinlog(result chan error) {
 	
 	dbopen := &mysqlDriver{}
@@ -638,7 +672,7 @@ func (This *BinlogDump) startConnAndDumpBinlog(result chan error) {
 
 	result <- fmt.Errorf("running") // 消息需要及时消费，否则是阻塞
 	This.parser.connectionId = connectionId
-	//go This.checkDumpConnection(connectionId)
+	//go This.checkDumpConnection(connectionId) //检查同步状态
 	//*** get connection id end
 
 	// 如果传入的pos为空，则使用当前最新
@@ -677,6 +711,9 @@ func (This *BinlogDump) startConnAndDumpBinlog(result chan error) {
 	This.parser.KillConnect(This.parser.connectionId)
 }
 
+/**
+ 检查同步状态
+*/
 func (This *BinlogDump) checkDumpConnection(connectionId string) {
 	defer func() {
 		if err := recover();err !=nil{
