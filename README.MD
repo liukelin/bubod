@@ -1,4 +1,4 @@
-# bubod ---- MySQL/MariaDB 数据变更增量事件获取 
+# bubod ---- MySQL/MariaDB binlog时间解析 
 
 
 * 支持同步到多种第三方服务, for example:
